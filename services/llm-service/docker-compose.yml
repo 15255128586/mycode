@@ -1,0 +1,12 @@
+services:
+  llm-service:
+    build: .
+    ports:
+      - "9001:9001"
+    environment:
+      - MODELSCOPE_BASE_URL=${MODELSCOPE_BASE_URL}
+      - MODELSCOPE_API_KEY=${MODELSCOPE_API_KEY}
+      - MODELSCOPE_MODEL=${MODELSCOPE_MODEL}
+    volumes:
+      - ./app:/app/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9001", "--reload"]

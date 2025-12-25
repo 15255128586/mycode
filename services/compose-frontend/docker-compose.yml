@@ -1,0 +1,18 @@
+services:
+  compose-frontend:
+    build: .
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_DOC_INGEST_BASE_URL=${VITE_DOC_INGEST_BASE_URL}
+      - VITE_COMPOSE_BASE_URL=${VITE_COMPOSE_BASE_URL}
+      - VITE_FILE_MANAGER_BASE_URL=${VITE_FILE_MANAGER_BASE_URL}
+      - VITE_DOC_INGEST_PROXY_TARGET=http://host.docker.internal:9100
+      - VITE_COMPOSE_PROXY_TARGET=http://host.docker.internal:8000
+      - VITE_FILE_MANAGER_PROXY_TARGET=http://host.docker.internal:9300
+    volumes:
+      - .:/app
+      - ./node_modules:/app/node_modules
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

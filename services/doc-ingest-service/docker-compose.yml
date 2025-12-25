@@ -1,0 +1,14 @@
+services:
+  doc-ingest-service:
+    build: .
+    ports:
+      - "9100:9100"
+    environment:
+      - LLM_BASE_URL=http://host.docker.internal:9001
+      - DATABASE_URL=sqlite:///./data/ingest.db
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9100", "--reload"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
