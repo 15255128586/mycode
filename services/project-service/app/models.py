@@ -32,6 +32,7 @@ class ProjectCreate(BaseModel):
     health: Optional[str] = None
     progress: Optional[float] = None
     archived: Optional[bool] = None
+    flow_json: Optional[Union[dict, list]] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -45,6 +46,7 @@ class ProjectUpdate(BaseModel):
     health: Optional[str] = None
     progress: Optional[float] = None
     archived: Optional[bool] = None
+    flow_json: Optional[Union[dict, list]] = None
 
 
 class ProjectItem(BaseModel):
@@ -60,6 +62,7 @@ class ProjectItem(BaseModel):
     progress: Optional[float] = None
     archived: Optional[bool] = None
     archived_at: Optional[str] = None
+    flow_json: Optional[Union[dict, list]] = None
     created_at: str
     updated_at: str
 

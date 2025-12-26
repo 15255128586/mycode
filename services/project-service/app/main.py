@@ -51,6 +51,21 @@ def _parse_nodes(raw: str):
         return None
 
 
+def _serialize_flow(flow) -> str | None:
+    if flow is None:
+        return None
+    return json.dumps(flow, ensure_ascii=False)
+
+
+def _parse_flow(raw: str | None):
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
 def _definition_item(definition: ProjectDefinition) -> ProjectDefinitionItem:
     return ProjectDefinitionItem(
         id=definition.id,
@@ -75,6 +90,7 @@ def _project_item(project: Project) -> ProjectItem:
     progress=project.progress,
     archived=project.archived,
     archived_at=project.archived_at,
+    flow_json=_parse_flow(project.flow_json),
     created_at=project.created_at,
     updated_at=project.updated_at,
   )
@@ -116,6 +132,8 @@ def _apply_project_updates(project: Project, payload: ProjectCreate | ProjectUpd
       project.archived_at = project.archived_at or now
     else:
       project.archived_at = None
+  if payload.flow_json is not None:
+    project.flow_json = _serialize_flow(payload.flow_json)
   project.updated_at = now
 
 

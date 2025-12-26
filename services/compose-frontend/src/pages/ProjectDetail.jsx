@@ -18,6 +18,12 @@ import Placeholder from "./Placeholder.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import ProjectFormModal from "../components/ProjectFormModal.jsx";
 import { useProjects } from "../state/projects.jsx";
+import {
+  DEFAULT_FLOW_TEMPLATE,
+  createEmptyWorkspace,
+  normalizeWorkspace,
+  sanitizeWorkspace,
+} from "../data/flowTemplates.js";
 
 const statusToneMap = {
   已完成: "leaf",
@@ -179,159 +185,67 @@ const createEdge = (params) => ({
   style: { stroke: "#c7cbd3", strokeWidth: 2 },
 });
 
-const seedNodes = [
-  {
-    id: "draft",
-    title: "起草请示文件",
-    kind: "任务",
-    owner: "项目办公室",
-    status: "进行中",
-    output: "请示文件",
-    note: "等待附件补充",
-    row: 0,
-    col: 1,
-  },
-  {
-    id: "report",
-    title: "上会汇报",
-    kind: "审批",
-    owner: "项目负责人",
-    status: "待开始",
-    output: "会议决议",
-    note: "需准备演示材料",
-    row: 1,
-    col: 1,
-  },
-  {
-    id: "minutes",
-    title: "会议纪要（盖章版）",
-    kind: "交付物",
-    owner: "办公室",
-    status: "待开始",
-    output: "纪要文件",
-    note: "盖章后归档",
-    row: 2,
-    col: 1,
-  },
-  {
-    id: "contract",
-    title: "合同初稿",
-    kind: "任务",
-    owner: "法务",
-    status: "待开始",
-    output: "合同文本",
-    note: "版本 v0.1",
-    row: 3,
-    col: 0,
-  },
-  {
-    id: "budget",
-    title: "预算校核",
-    kind: "任务",
-    owner: "财务",
-    status: "待开始",
-    output: "预算确认",
-    note: "参考批复金额",
-    row: 3,
-    col: 1,
-  },
-  {
-    id: "procure",
-    title: "招采方案",
-    kind: "任务",
-    owner: "采购",
-    status: "待开始",
-    output: "招采方案",
-    note: "需比价清单",
-    row: 3,
-    col: 2,
-  },
-  {
-    id: "merge",
-    title: "合同会签",
-    kind: "审批",
-    owner: "项目负责人",
-    status: "待开始",
-    output: "会签记录",
-    note: "多部门确认",
-    row: 4,
-    col: 1,
-  },
-  {
-    id: "archive",
-    title: "归档入库",
-    kind: "交付物",
-    owner: "档案室",
-    status: "待开始",
-    output: "归档包",
-    note: "含盖章件",
-    row: 5,
-    col: 1,
-  },
-  {
-    id: "payment",
-    title: "付款申请",
-    kind: "任务",
-    owner: "财务",
-    status: "待开始",
-    output: "付款申请单",
-    note: "对齐付款节点",
-    row: 6,
-    col: 1,
-  },
-  {
-    id: "done",
-    title: "付款完成",
-    kind: "结果",
-    owner: "财务",
-    status: "待开始",
-    output: "付款凭证",
-    note: "归档存证",
-    row: 7,
-    col: 1,
-  },
-];
+const normalizeFlowNodes = (nodes) =>
+  nodes.map((node, index) => {
+    const data = node.data || {};
+    const kind = kindToneMap[data.kind] ? data.kind : "任务";
+    const workspace = normalizeWorkspace(data.workspace);
+    return {
+      id: node.id || `node-${index + 1}`,
+      type: node.type || "projectDetailCard",
+      position: node.position || {
+        x: layout.padX + (index % 2) * layout.laneWidth,
+        y: layout.padY + index * layout.rowHeight,
+      },
+      data: {
+        title: data.title || `新节点 ${index + 1}`,
+        kind,
+        owner: data.owner || "未分配",
+        status: data.status || "待开始",
+        output: data.output || defaultOutputByKind[kind] || "待定义",
+        note: data.note || "",
+        workspace,
+      },
+    };
+  });
 
-const baseNodes = seedNodes.map((seed) => ({
-  id: seed.id,
-  type: "projectDetailCard",
-  position: {
-    x: layout.padX + seed.col * layout.laneWidth,
-    y: layout.padY + seed.row * layout.rowHeight,
-  },
-  data: {
-    title: seed.title,
-    kind: seed.kind,
-    owner: seed.owner,
-    status: seed.status,
-    output: seed.output,
-    note: seed.note,
-  },
-}));
+const normalizeFlowEdges = (edges) =>
+  edges
+    .filter((edge) => edge && edge.source && edge.target)
+    .map((edge, index) =>
+      createEdge({
+        id: edge.id || `edge-${edge.source}-${edge.target}-${index}`,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+      })
+    );
 
-const baseEdges = [
-  { from: "draft", to: "report" },
-  { from: "report", to: "minutes" },
-  { from: "minutes", to: "contract" },
-  { from: "minutes", to: "budget" },
-  { from: "minutes", to: "procure" },
-  { from: "contract", to: "merge" },
-  { from: "budget", to: "merge" },
-  { from: "procure", to: "merge" },
-  { from: "merge", to: "archive" },
-  { from: "archive", to: "payment" },
-  { from: "payment", to: "done" },
-].map((edge, index) => ({
-  id: `edge-${edge.from}-${edge.to}-${index}`,
-  source: edge.from,
-  target: edge.to,
-  type: "smoothstep",
-  markerEnd: {
-    type: MarkerType.ArrowClosed,
-    color: "#c7cbd3",
-  },
-  style: { stroke: "#c7cbd3", strokeWidth: 2 },
-}));
+const hasValidPosition = (node) =>
+  Number.isFinite(node?.position?.x) && Number.isFinite(node?.position?.y);
+
+const buildFlowPayload = (nodes, edges) => ({
+  nodes: nodes.map(({ id, type, position, data }) => ({
+    id,
+    type,
+    position: { x: position.x, y: position.y },
+    data: {
+      ...data,
+      workspace: sanitizeWorkspace(data?.workspace),
+    },
+  })),
+  edges: edges.map(({ id, source, target, sourceHandle, targetHandle }) => ({
+    id,
+    source,
+    target,
+    sourceHandle,
+    targetHandle,
+  })),
+});
+
+const baseNodes = normalizeFlowNodes(DEFAULT_FLOW_TEMPLATE.flow.nodes);
+const baseEdges = normalizeFlowEdges(DEFAULT_FLOW_TEMPLATE.flow.edges);
 
 function ProjectDetailNode({ data, selected }) {
   const statusTone = statusToneMap[data.status] || "muted";
@@ -382,12 +296,14 @@ function ProjectDetailInner() {
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
-  const initialLayoutDone = useRef(false);
   const canvasRef = useRef(null);
   const dialogInputRef = useRef(null);
   const connectionSourceRef = useRef(null);
   const connectionMadeRef = useRef(false);
   const nodeIdRef = useRef(0);
+  const saveTimerRef = useRef(null);
+  const canAutoSaveRef = useRef(false);
+  const loadedProjectRef = useRef(null);
   const { screenToFlowPosition } = useReactFlow();
   const [createDialog, setCreateDialog] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -440,6 +356,41 @@ function ProjectDetailInner() {
     },
     [screenToFlowPosition]
   );
+
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+    if (loadedProjectRef.current === project.code) {
+      return;
+    }
+
+    loadedProjectRef.current = project.code;
+    canAutoSaveRef.current = false;
+
+    const flow = project.flow_json;
+    let nextNodes = baseNodes;
+    let nextEdges = baseEdges;
+    let shouldLayout = true;
+
+    if (flow && Array.isArray(flow.nodes) && Array.isArray(flow.edges)) {
+      shouldLayout = !flow.nodes.every(hasValidPosition);
+      nextNodes = normalizeFlowNodes(flow.nodes);
+      nextEdges = normalizeFlowEdges(flow.edges);
+    }
+    if (shouldLayout) {
+      nextNodes = getLayoutedNodes(nextNodes, nextEdges, layout.padX, layout.padY);
+    }
+
+    const containerWidth = canvasRef.current?.clientWidth ?? 0;
+    const centeredNodes =
+      containerWidth > 0
+        ? centerNodesHorizontally(nextNodes, containerWidth)
+        : nextNodes;
+
+    setNodes(centeredNodes);
+    setEdges(nextEdges);
+  }, [project, setEdges, setNodes]);
 
   const applyAutoLayout = useCallback(() => {
     setNodes((nds) => {
@@ -497,14 +448,6 @@ function ProjectDetailInner() {
   );
 
   useEffect(() => {
-    if (initialLayoutDone.current) {
-      return;
-    }
-    initialLayoutDone.current = true;
-    applyAutoLayout();
-  }, [applyAutoLayout]);
-
-  useEffect(() => {
     const handleResize = () => {
       applyCenteringOnly();
     };
@@ -539,6 +482,7 @@ function ProjectDetailInner() {
         status: "待开始",
         output,
         note: "",
+        workspace: createEmptyWorkspace(),
       },
     };
 
@@ -578,6 +522,28 @@ function ProjectDetailInner() {
       window.removeEventListener("keydown", handleKeydown);
     };
   }, [createDialog, draftTitle, handleCreateNode]);
+
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+    if (!canAutoSaveRef.current) {
+      canAutoSaveRef.current = true;
+      return;
+    }
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    const flowPayload = buildFlowPayload(nodes, edges);
+    saveTimerRef.current = window.setTimeout(() => {
+      updateProject(project.code, { flow_json: flowPayload });
+    }, 700);
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [edges, nodes, project, updateProject]);
 
   if (isLoading) {
     return (

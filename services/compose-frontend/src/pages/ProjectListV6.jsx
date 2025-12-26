@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import ProjectFormModal from "../components/ProjectFormModal.jsx";
 import { useProjects } from "../state/projects.jsx";
+import {
+  DEFAULT_FLOW_TEMPLATE,
+  cloneFlow,
+  sanitizeFlowForCreate,
+} from "../data/flowTemplates.js";
 
 const statusFilters = ["全部", "进行中", "需关注", "已暂停", "已完成"];
 const riskFilters = ["全部", "低风险", "中风险", "高风险"];
@@ -111,7 +116,23 @@ export default function ProjectListV6({ search = "", onSearchChange = () => {} }
   };
 
   const handleCreateProject = (payload) => {
-    createProject(payload);
+    const { flowSource, copyProjectCode, ...projectPayload } = payload;
+    let flow = null;
+
+    if (flowSource === "copy" && copyProjectCode) {
+      const sourceProject = projects.find(
+        (project) => project.code === copyProjectCode
+      );
+      if (sourceProject?.flow_json) {
+        flow = sanitizeFlowForCreate(cloneFlow(sourceProject.flow_json));
+      }
+    }
+
+    if (!flow) {
+      flow = sanitizeFlowForCreate(cloneFlow(DEFAULT_FLOW_TEMPLATE.flow));
+    }
+
+    createProject({ ...projectPayload, flow_json: flow });
     setCreateModalOpen(false);
   };
 
@@ -343,6 +364,10 @@ export default function ProjectListV6({ search = "", onSearchChange = () => {} }
           title="新建项目"
           submitLabel="创建"
           existingCodes={projects.map((project) => project.code)}
+          flowOptions={{
+            defaultTemplate: DEFAULT_FLOW_TEMPLATE,
+            copyProjects: projects,
+          }}
           onSubmit={handleCreateProject}
           onClose={() => setCreateModalOpen(false)}
         />

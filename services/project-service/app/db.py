@@ -33,6 +33,7 @@ class Project(Base):
     progress: Mapped[float | None] = mapped_column(Float, nullable=True)
     archived: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     archived_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    flow_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String)
     updated_at: Mapped[str] = mapped_column(String)
 
@@ -63,6 +64,7 @@ PROJECT_COLUMN_DEFS = {
     "progress": "DOUBLE PRECISION",
     "archived": "BOOLEAN DEFAULT FALSE",
     "archived_at": "VARCHAR",
+    "flow_json": "TEXT",
 }
 
 

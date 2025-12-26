@@ -42,6 +42,7 @@ const normalizeProject = (project) => {
     progress,
     archived: project.archived ?? false,
     archivedAt: project.archived_at ?? project.archivedAt ?? null,
+    flow_json: project.flow_json ?? null,
     due: project.due ?? "",
     department: project.department ?? "",
     desc: project.desc ?? "",
@@ -114,6 +115,7 @@ export function ProjectsProvider({ children }) {
           desc: payload.desc,
           health,
           progress,
+          flow_json: payload.flow_json,
         }),
       });
       if (!response.ok) {

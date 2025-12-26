@@ -33,16 +33,33 @@ export default function ProjectFormModal({
   initialValues,
   codeReadOnly = false,
   existingCodes = [],
+  flowOptions,
   onSubmit,
   onClose,
 }) {
   const [form, setForm] = useState(() => buildDefaults(initialValues));
   const [errors, setErrors] = useState({});
+  const [flowSource, setFlowSource] = useState("template");
+  const [copySource, setCopySource] = useState("");
 
   const normalizedCodes = useMemo(
     () => new Set(existingCodes.map((code) => code.trim().toLowerCase())),
     [existingCodes]
   );
+  const copyCandidates = useMemo(() => {
+    if (!flowOptions?.copyProjects) {
+      return [];
+    }
+    return flowOptions.copyProjects
+      .map((project) => ({
+        code: project.code,
+        name: project.name,
+        archived: project.archived,
+      }))
+      .filter((project) => project.code && project.name)
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  }, [flowOptions]);
+  const hasCopyCandidates = copyCandidates.length > 0;
 
   const handleChange = (field) => (event) => {
     const value = event.target.value;
@@ -53,6 +70,16 @@ export default function ProjectFormModal({
       }
       const next = { ...prev };
       delete next[field];
+      return next;
+    });
+  };
+  const clearFlowError = () => {
+    setErrors((prev) => {
+      if (!prev.flowSource) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next.flowSource;
       return next;
     });
   };
@@ -89,6 +116,18 @@ export default function ProjectFormModal({
       desc: form.desc.trim(),
     };
 
+    if (flowOptions) {
+      if (flowSource === "copy" && !copySource) {
+        setErrors((prev) => ({
+          ...prev,
+          flowSource: "请选择要复制的项目",
+        }));
+        return;
+      }
+      payload.flowSource = flowSource;
+      payload.copyProjectCode = copySource;
+    }
+
     onSubmit(payload);
   };
 
@@ -97,6 +136,68 @@ export default function ProjectFormModal({
       <div className="project-modal-card" onClick={(event) => event.stopPropagation()}>
         <div className="project-modal-title">{title}</div>
         <div className="project-form-grid">
+          {flowOptions ? (
+            <div className="project-form-field project-form-field-full">
+              <span className="project-form-label">流程来源</span>
+              <div className="project-form-options">
+                <button
+                  type="button"
+                  className={`project-form-option ${
+                    flowSource === "template" ? "active" : ""
+                  }`}
+                  onClick={() => {
+                    setFlowSource("template");
+                    clearFlowError();
+                  }}
+                >
+                  {flowOptions.defaultTemplate?.name || "默认模板"}
+                </button>
+                <button
+                  type="button"
+                  className={`project-form-option ${
+                    flowSource === "copy" ? "active" : ""
+                  }`}
+                  disabled={!hasCopyCandidates}
+                  onClick={() => {
+                    if (!hasCopyCandidates) {
+                      return;
+                    }
+                    setFlowSource("copy");
+                    clearFlowError();
+                  }}
+                >
+                  复制已有项目
+                </button>
+              </div>
+              {flowSource === "copy" ? (
+                <>
+                  <select
+                    className="project-form-input"
+                    value={copySource}
+                    onChange={(event) => {
+                      setCopySource(event.target.value);
+                      clearFlowError();
+                    }}
+                  >
+                    <option value="">请选择项目</option>
+                    {copyCandidates.map((project) => (
+                      <option key={project.code} value={project.code}>
+                        {project.name} · {project.code}
+                        {project.archived ? "（已归档）" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.flowSource ? (
+                    <span className="project-form-error">{errors.flowSource}</span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="project-form-help">
+                  {flowOptions.defaultTemplate?.description || "使用简单线性流程"}
+                </span>
+              )}
+            </div>
+          ) : null}
           <label className="project-form-field">
             <span className="project-form-label">项目名称</span>
             <input
