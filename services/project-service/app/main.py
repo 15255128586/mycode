@@ -217,12 +217,12 @@ def create_material_binding(
   project_id: str,
   payload: MaterialBindingCreate,
 ) -> MaterialBindingItem:
-    node_key = payload.node_key or None
-    role = payload.role or ("project" if node_key is None else "node")
-    now = _now()
+  node_key = payload.node_key or None
+  role = payload.role or ("project" if node_key is None else "node")
+  now = _now()
 
-    with get_session() as session:
-        project = session.get(Project, project_id)
+  with get_session() as session:
+    project = session.get(Project, project_id)
     if not project:
       project = Project(
         id=project_id,
@@ -240,37 +240,37 @@ def create_material_binding(
         created_at=now,
         updated_at=now,
       )
-            session.add(project)
-            session.commit()
+      session.add(project)
+      session.commit()
 
-        if node_key is None:
-            node_clause = MaterialBinding.node_key.is_(None)
-        else:
-            node_clause = MaterialBinding.node_key == node_key
+    if node_key is None:
+      node_clause = MaterialBinding.node_key.is_(None)
+    else:
+      node_clause = MaterialBinding.node_key == node_key
 
-        existing = session.execute(
-            select(MaterialBinding).where(
-                MaterialBinding.project_id == project_id,
-                node_clause,
-                MaterialBinding.file_id == payload.file_id,
-            )
-        ).scalar_one_or_none()
-        if existing:
-            return _binding_item(existing)
+    existing = session.execute(
+      select(MaterialBinding).where(
+        MaterialBinding.project_id == project_id,
+        node_clause,
+        MaterialBinding.file_id == payload.file_id,
+      )
+    ).scalar_one_or_none()
+    if existing:
+      return _binding_item(existing)
 
-        binding = MaterialBinding(
-            id=str(uuid.uuid4()),
-            project_id=project_id,
-            node_key=node_key,
-            file_id=payload.file_id,
-            role=role,
-            created_at=now,
-        )
-        session.add(binding)
-        session.commit()
-        session.refresh(binding)
+    binding = MaterialBinding(
+      id=str(uuid.uuid4()),
+      project_id=project_id,
+      node_key=node_key,
+      file_id=payload.file_id,
+      role=role,
+      created_at=now,
+    )
+    session.add(binding)
+    session.commit()
+    session.refresh(binding)
 
-    return _binding_item(binding)
+  return _binding_item(binding)
 
 
 @app.get("/projects/{project_id}/materials", response_model=MaterialBindingList)
