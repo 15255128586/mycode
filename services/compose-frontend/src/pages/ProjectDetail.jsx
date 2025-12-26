@@ -7,14 +7,17 @@ import ReactFlow, {
   MarkerType,
   MiniMap,
   Position,
+  ReactFlowProvider,
   useReactFlow,
   useEdgesState,
   useNodesState,
 } from "reactflow";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import "reactflow/dist/style.css";
 import Placeholder from "./Placeholder.jsx";
-import { getProjectByCode } from "../data/projects.js";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
+import ProjectFormModal from "../components/ProjectFormModal.jsx";
+import { useProjects } from "../state/projects.jsx";
 
 const statusToneMap = {
   已完成: "leaf",
@@ -28,6 +31,19 @@ const kindToneMap = {
   交付物: "calm",
   审批: "sun",
   结果: "leaf",
+};
+
+const miniMapToneColors = {
+  accent: "var(--accent)",
+  calm: "var(--calm)",
+  sun: "var(--sun)",
+  leaf: "var(--leaf)",
+  muted: "var(--muted)",
+};
+
+const getMiniMapNodeColor = (node) => {
+  const tone = kindToneMap[node?.data?.kind] || "muted";
+  return miniMapToneColors[tone] || miniMapToneColors.muted;
 };
 
 const layout = {
@@ -71,7 +87,7 @@ const getLayoutedNodes = (nodes, edges, originX, originY) => {
 
   dagre.layout(graph);
 
-  return nodes.map((node) => {
+  const layouted = nodes.map((node) => {
     const layoutNode = graph.node(node.id);
     if (!layoutNode) {
       return node;
@@ -84,9 +100,32 @@ const getLayoutedNodes = (nodes, edges, originX, originY) => {
 
     return {
       ...node,
-      position: snapPosition(nextPosition, originX, originY),
+      position: nextPosition,
     };
   });
+
+  const minX = layouted.reduce(
+    (current, node) => Math.min(current, node.position.x),
+    Infinity
+  );
+  const minY = layouted.reduce(
+    (current, node) => Math.min(current, node.position.y),
+    Infinity
+  );
+  const offsetX = Math.max(originX - minX, 0);
+  const offsetY = Math.max(originY - minY, 0);
+
+  if (!offsetX && !offsetY) {
+    return layouted;
+  }
+
+  return layouted.map((node) => ({
+    ...node,
+    position: {
+      x: node.position.x + offsetX,
+      y: node.position.y + offsetY,
+    },
+  }));
 };
 
 const centerNodesHorizontally = (nodes, containerWidth) => {
@@ -255,7 +294,7 @@ const seedNodes = [
 
 const baseNodes = seedNodes.map((seed) => ({
   id: seed.id,
-  type: "appleCard",
+  type: "projectDetailCard",
   position: {
     x: layout.padX + seed.col * layout.laneWidth,
     y: layout.padY + seed.row * layout.rowHeight,
@@ -294,39 +333,45 @@ const baseEdges = [
   style: { stroke: "#c7cbd3", strokeWidth: 2 },
 }));
 
-function AppleNode({ data, selected }) {
+function ProjectDetailNode({ data, selected }) {
   const statusTone = statusToneMap[data.status] || "muted";
   const kindTone = kindToneMap[data.kind] || "muted";
 
   return (
-    <div className={`flow-apple-node ${selected ? "selected" : ""}`}>
-      <Handle type="target" position={Position.Top} className="flow-apple-handle" />
-      <div className="flow-apple-card">
-        <div className="flow-apple-header">
-          <span className={`flow-apple-pill flow-apple-pill-${kindTone}`}>
+    <div className={`project-detail-node ${selected ? "selected" : ""}`}>
+      <Handle type="target" position={Position.Top} className="project-detail-handle" />
+      <div className="project-detail-card">
+        <div className="project-detail-header">
+          <span className={`project-detail-pill project-detail-pill-${kindTone}`}>
             {data.kind}
           </span>
-          <span className={`flow-apple-pill flow-apple-status-${statusTone}`}>
+          <span className={`project-detail-pill project-detail-status-${statusTone}`}>
             {data.status}
           </span>
         </div>
-        <div className="flow-apple-title">{data.title}</div>
-        <div className="flow-apple-meta">负责人 {data.owner}</div>
-        <div className="flow-apple-output">产出 {data.output}</div>
-        {data.note ? <div className="flow-apple-note">{data.note}</div> : null}
+        <div className="project-detail-title">{data.title}</div>
+        <div className="project-detail-meta">负责人 {data.owner}</div>
+        <div className="project-detail-output">产出 {data.output}</div>
+        {data.note ? <div className="project-detail-note">{data.note}</div> : null}
       </div>
-      <Handle type="source" position={Position.Bottom} className="flow-apple-handle" />
+      <Handle type="source" position={Position.Bottom} className="project-detail-handle" />
     </div>
   );
 }
 
 const nodeTypes = {
-  appleCard: AppleNode,
+  projectDetailCard: ProjectDetailNode,
 };
 
-export default function ProjectFlowApple() {
+function ProjectDetailInner() {
   const { id } = useParams();
-  const project = getProjectByCode(id);
+  const navigate = useNavigate();
+  const { projects, updateProject, archiveProject, restoreProject, deleteProject } =
+    useProjects();
+  const project = useMemo(
+    () => projects.find((item) => item.code === id),
+    [id, projects]
+  );
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
   const initialLayoutDone = useRef(false);
@@ -337,6 +382,8 @@ export default function ProjectFlowApple() {
   const nodeIdRef = useRef(0);
   const { screenToFlowPosition } = useReactFlow();
   const [createDialog, setCreateDialog] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftKind, setDraftKind] = useState("任务");
 
@@ -394,6 +441,33 @@ export default function ProjectFlowApple() {
     });
   }, [edges, setNodes]);
 
+  const handlePaneClick = useCallback(
+    (event) => {
+      if (event.detail === 2) {
+        applyAutoLayout();
+      }
+    },
+    [applyAutoLayout]
+  );
+
+  const handleNodeClick = useCallback(
+    (_event, node) => {
+      if (!node || node.data?.kind !== "任务") {
+        return;
+      }
+      if (!id) {
+        return;
+      }
+      navigate(`/projects/${id}/tasks/${node.id}`, {
+        state: {
+          nodeTitle: node.data?.title,
+          kind: node.data?.kind,
+        },
+      });
+    },
+    [id, navigate]
+  );
+
   const applyCenteringOnly = useCallback(() => {
     const containerWidth = canvasRef.current?.clientWidth ?? 0;
     if (!containerWidth) {
@@ -448,7 +522,7 @@ export default function ProjectFlowApple() {
 
     const newNode = {
       id: nextId,
-      type: "appleCard",
+      type: "projectDetailCard",
       position: snappedPosition,
       data: {
         title: draftTitle.trim(),
@@ -497,14 +571,6 @@ export default function ProjectFlowApple() {
     };
   }, [createDialog, draftTitle, handleCreateNode]);
 
-  const canvasHeight = useMemo(() => {
-    const maxY = nodes.reduce(
-      (current, node) => Math.max(current, node.position.y + NODE_HEIGHT),
-      0
-    );
-    return Math.max(1400, maxY + 240);
-  }, [nodes]);
-
   if (!project) {
     return (
       <Placeholder
@@ -516,12 +582,63 @@ export default function ProjectFlowApple() {
   }
 
   return (
-    <div className="flow-apple-only">
+    <div className="project-detail-only">
+      <header className="project-detail-headerbar panel">
+        <div className="project-detail-header-main">
+          <div className="project-detail-header-eyebrow">{project.code}</div>
+          <div className="project-detail-header-title">{project.name}</div>
+          <div className="project-detail-header-meta">
+            <span className="project-detail-meta-item">负责人 {project.owner}</span>
+            <span className="project-detail-meta-item">截止 {project.due}</span>
+            <span className="project-detail-meta-item">状态 {project.status}</span>
+            {project.archived ? (
+              <span className="status-pill status-archived">已归档</span>
+            ) : null}
+          </div>
+        </div>
+        <div className="project-detail-header-actions">
+          <button
+            className="secondary-button"
+            onClick={() => setEditDialogOpen(true)}
+          >
+            编辑信息
+          </button>
+          {project.archived ? (
+            <button
+              className="ghost-button"
+              onClick={() => restoreProject(project.code)}
+            >
+              恢复
+            </button>
+          ) : (
+            <button
+              className="ghost-button"
+              onClick={() => archiveProject(project.code)}
+            >
+              归档
+            </button>
+          )}
+          <button
+            className="danger-button"
+            onClick={() => setPendingDelete(true)}
+          >
+            删除
+          </button>
+        </div>
+      </header>
       <div
-        className="flow-apple-canvas"
-        style={{ height: canvasHeight }}
+        className="project-detail-canvas"
         ref={canvasRef}
       >
+        <div className="project-detail-hints">
+          <div className="project-detail-hints-title">使用提示</div>
+          <ul className="project-detail-hints-list">
+            <li>拖动节点手柄到空白处，可创建新节点</li>
+            <li>按住 Ctrl/⌘ 滚轮缩放画布</li>
+            <li>滚轮上下平移，拖动画布可自由移动</li>
+            <li>双击空白区域自动整理布局</li>
+          </ul>
+        </div>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -532,15 +649,18 @@ export default function ProjectFlowApple() {
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onNodeDragStop={handleNodeDragStop}
-          onPaneDoubleClick={applyAutoLayout}
+          onPaneClick={handlePaneClick}
+          onNodeClick={handleNodeClick}
           fitView={false}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
+          zoomOnScroll
+          zoomOnPinch
           zoomOnDoubleClick={false}
-          preventScrolling={false}
-          panOnDrag={false}
-          panOnScroll={false}
+          zoomActivationKeyCode={["Control", "Meta"]}
+          preventScrolling
+          panOnDrag
+          panOnScroll
+          panOnScrollMode="vertical"
           defaultEdgeOptions={{ type: "smoothstep" }}
           style={{ width: "100%", height: "100%" }}
         >
@@ -548,32 +668,35 @@ export default function ProjectFlowApple() {
           <MiniMap
             pannable
             zoomable
-            nodeStrokeColor="#c7cbd3"
-            nodeColor="#ffffff"
-            maskColor="rgba(255, 255, 255, 0.7)"
+            nodeStrokeColor="rgba(29, 27, 23, 0.4)"
+            nodeColor={getMiniMapNodeColor}
+            maskColor="rgba(29, 27, 23, 0.18)"
+            maskStrokeColor="rgba(29, 27, 23, 0.55)"
+            maskStrokeWidth={2}
+            nodeBorderRadius={6}
           />
         </ReactFlow>
       </div>
       {createDialog ? (
         <div
-          className="flow-apple-modal"
+          className="project-detail-modal"
           role="dialog"
           aria-modal="true"
           onClick={() => setCreateDialog(null)}
         >
           <div
-            className="flow-apple-modal-card"
+            className="project-detail-modal-card"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flow-apple-modal-title">新建节点</div>
-            <div className="flow-apple-modal-field">
-              <div className="flow-apple-modal-label">类型</div>
-              <div className="flow-apple-modal-types">
+            <div className="project-detail-modal-title">新建节点</div>
+            <div className="project-detail-modal-field">
+              <div className="project-detail-modal-label">类型</div>
+              <div className="project-detail-modal-types">
                 {["任务", "审批", "交付物"].map((item) => (
                   <button
                     key={item}
                     type="button"
-                    className={`flow-apple-type ${
+                    className={`project-detail-type ${
                       draftKind === item ? "active" : ""
                     }`}
                     onClick={() => setDraftKind(item)}
@@ -583,17 +706,17 @@ export default function ProjectFlowApple() {
                 ))}
               </div>
             </div>
-            <div className="flow-apple-modal-field">
-              <div className="flow-apple-modal-label">标题</div>
+            <div className="project-detail-modal-field">
+              <div className="project-detail-modal-label">标题</div>
               <input
                 ref={dialogInputRef}
-                className="flow-apple-modal-input"
+                className="project-detail-modal-input"
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
                 placeholder="请输入节点名称"
               />
             </div>
-            <div className="flow-apple-modal-actions">
+            <div className="project-detail-modal-actions">
               <button
                 type="button"
                 className="ghost-button"
@@ -613,6 +736,49 @@ export default function ProjectFlowApple() {
           </div>
         </div>
       ) : null}
+      {editDialogOpen ? (
+        <ProjectFormModal
+          title="编辑项目"
+          submitLabel="保存"
+          codeReadOnly
+          initialValues={{
+            name: project.name,
+            code: project.code,
+            owner: project.owner,
+            status: project.status,
+            due: project.due,
+            department: project.department || "",
+            desc: project.desc || "",
+            health: project.health || "稳定",
+            progress: project.progress ?? 0,
+          }}
+          onSubmit={(payload) => {
+            updateProject(project.code, payload);
+            setEditDialogOpen(false);
+          }}
+          onClose={() => setEditDialogOpen(false)}
+        />
+      ) : null}
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="确认删除项目？"
+          message={`删除后将无法恢复：${project.name}`}
+          confirmLabel="删除"
+          onConfirm={() => {
+            deleteProject(project.code);
+            navigate("/");
+          }}
+          onCancel={() => setPendingDelete(false)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+export default function ProjectDetail() {
+  return (
+    <ReactFlowProvider>
+      <ProjectDetailInner />
+    </ReactFlowProvider>
   );
 }

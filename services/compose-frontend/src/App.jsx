@@ -1,81 +1,59 @@
 import { useState } from "react";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
-import ProjectFlowApple from "./pages/ProjectFlowApple.jsx";
-import ProjectList from "./pages/ProjectList.jsx";
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import AutoReport from "./pages/AutoReport.jsx";
+import MyTodo from "./pages/MyTodo.jsx";
+import ProjectDetail from "./pages/ProjectDetail.jsx";
+import ProjectListV6 from "./pages/ProjectListV6.jsx";
+import TaskWorkspace from "./pages/TaskWorkspace.jsx";
 import Placeholder from "./pages/Placeholder.jsx";
+import { ProjectsProvider } from "./state/projects.jsx";
 
 const navItems = [
   { label: "项目管理", to: "/" },
-  { label: "时间线", to: "/timeline" },
-  { label: "资源", to: "/resources" },
-  { label: "报告", to: "/reports" },
-  { label: "设置", to: "/settings" },
+  { label: "我的待办", to: "/todo" },
+  { label: "自动报告", to: "/auto-report" },
 ];
 
-function Layout({ children, searchValue, onSearchChange }) {
+function Layout({ children }) {
+  const location = useLocation();
+  const isWorkspace = /^\/projects\/[^/]+\/tasks\/[^/]+/.test(location.pathname);
+  const isV6 = location.pathname === "/" || location.pathname.startsWith("/projects-v6");
+
   return (
-    <div className="app">
+    <div
+      className={`app${isWorkspace ? " app-workspace" : ""}${
+        isV6 ? " app-v6" : ""
+      }`}
+    >
       <div className="bg-orbit orbit-one" />
       <div className="bg-orbit orbit-two" />
 
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">CS</span>
-          <div>
-            <div className="brand-title">Compose Studio</div>
-            <div className="brand-subtitle">项目控制台</div>
-          </div>
-        </div>
-        <nav className="nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `nav-item ${isActive ? "active" : ""}`
-              }
-            >
-              <span className="nav-indicator" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-card">
-          <div className="sidebar-card-title">季度重点</div>
-          <div className="sidebar-card-body">
-            对齐产品、运营与市场的发布节奏。
-          </div>
-          <div className="sidebar-card-footer">
-            <span>Q3 视野</span>
-            <button className="ghost-button">查看简报</button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="content">
-        <header className="topbar">
-          <div className="search">
-            <input
-              aria-label="搜索项目"
-              placeholder="搜索项目、团队或标签"
-              value={searchValue}
-              onChange={(event) => onSearchChange(event.target.value)}
-            />
-          </div>
-          <div className="topbar-actions">
-            <button className="ghost-button">导出</button>
-            <button className="primary-button">新建项目</button>
-            <div className="profile">
-              <div className="avatar">AC</div>
-              <div>
-                <div className="profile-name">陈 安瑞</div>
-                <div className="profile-role">组合负责人</div>
-              </div>
+      {!isWorkspace ? (
+        <aside className="sidebar">
+          <div className="brand">
+            <span className="brand-mark">CS</span>
+            <div>
+              <div className="brand-title">Compose Studio</div>
+              <div className="brand-subtitle">项目控制台</div>
             </div>
           </div>
-        </header>
+          <nav className="nav">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+              >
+                <span className="nav-indicator" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
+      ) : null}
 
+      <main className="content">
         {children}
       </main>
     </div>
@@ -86,71 +64,51 @@ export default function App() {
   const [searchValue, setSearchValue] = useState("");
 
   return (
-    <BrowserRouter>
-      <Layout searchValue={searchValue} onSearchChange={setSearchValue}>
-        <Routes>
+    <ProjectsProvider>
+      <BrowserRouter>
+        <Layout>
+          <Routes>
           <Route
             path="/"
             element={
-              <ProjectList
+              <ProjectListV6
                 search={searchValue}
                 onSearchChange={setSearchValue}
               />
             }
           />
-          <Route path="/projects/:id" element={<ProjectFlowApple />} />
           <Route
-            path="/timeline"
+            path="/projects-v6"
             element={
-              <Placeholder
-                title="时间线"
-                subtitle="项目节奏与关键依赖"
-                note="用于展示跨项目的计划排期、关键路径与里程碑依赖。"
+              <ProjectListV6
+                search={searchValue}
+                onSearchChange={setSearchValue}
               />
             }
           />
-          <Route
-            path="/resources"
-            element={
-              <Placeholder
-                title="资源"
-                subtitle="人力与资源分配"
-                note="用于跟踪团队负载、关键资源冲突与预算分配。"
-              />
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <Placeholder
-                title="报告"
-                subtitle="组合洞察与复盘"
-                note="用于输出阶段性复盘、趋势变化与风险汇总。"
-              />
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <Placeholder
-                title="设置"
-                subtitle="流程与权限"
-                note="用于管理权限、通知规则与系统集成。"
-              />
-            }
-          />
-          <Route
-            path="*"
-            element={
-              <Placeholder
-                title="页面不存在"
-                subtitle="返回项目管理"
-                note="当前地址没有对应页面，请从左侧导航进入。"
-              />
-            }
-          />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+            <Route path="/projects/:id/tasks/:nodeId" element={<TaskWorkspace />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route
+              path="/todo"
+              element={<MyTodo />}
+            />
+            <Route
+              path="/auto-report"
+              element={<AutoReport />}
+            />
+            <Route
+              path="*"
+              element={
+                <Placeholder
+                  title="页面不存在"
+                  subtitle="返回项目管理"
+                  note="当前地址没有对应页面，请从左侧导航进入。"
+                />
+              }
+            />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </ProjectsProvider>
   );
 }

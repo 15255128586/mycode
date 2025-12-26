@@ -1,0 +1,14 @@
+services:
+  pgdb:
+    image: postgres:15
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=project
+      - POSTGRES_PASSWORD=project
+      - POSTGRES_DB=project
+    volumes:
+      - pgdb-data:/var/lib/postgresql/data
+
+volumes:
+  pgdb-data:

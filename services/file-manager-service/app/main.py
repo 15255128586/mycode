@@ -4,6 +4,7 @@ import io
 import json
 import os
 import uuid
+from urllib.parse import quote, unquote
 
 import httpx
 from minio.error import S3Error
@@ -83,8 +84,17 @@ def _editor_config(settings, file_id: str, filename: str, last_modified: datetim
 
 def _read_metadata(stat) -> tuple[str, str | None]:
     metadata = stat.metadata or {}
-    filename = metadata.get("x-amz-meta-filename") or metadata.get("filename") or "document"
-    content_type = metadata.get("x-amz-meta-content-type") or metadata.get("content-type")
+    raw_filename = (
+        metadata.get("x-amz-meta-filename")
+        or metadata.get("filename")
+        or "document"
+    )
+    filename = unquote(raw_filename)
+    content_type = (
+        metadata.get("x-amz-meta-content-type")
+        or metadata.get("content-type")
+        or getattr(stat, "content_type", None)
+    )
     return filename, content_type
 
 
@@ -129,9 +139,10 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
 
     file_id = str(uuid.uuid4())
     content_type = file.content_type or "application/octet-stream"
+    filename = file.filename or "document"
+    safe_filename = quote(filename, safe="._-")
     metadata = {
-        "filename": file.filename or "document",
-        "content-type": content_type,
+        "filename": safe_filename,
     }
 
     try:
@@ -150,7 +161,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
 
     return UploadResponse(
         id=file_id,
-        filename=file.filename or "document",
+        filename=filename,
         size=stat.size,
         last_modified=stat.last_modified,
         content_type=content_type,
