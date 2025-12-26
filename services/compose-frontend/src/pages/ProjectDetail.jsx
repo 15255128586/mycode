@@ -366,8 +366,16 @@ const nodeTypes = {
 function ProjectDetailInner() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, updateProject, archiveProject, restoreProject, deleteProject } =
-    useProjects();
+  const {
+    projects,
+    updateProject,
+    archiveProject,
+    restoreProject,
+    deleteProject,
+    isLoading,
+    error,
+    reloadProjects,
+  } = useProjects();
   const project = useMemo(
     () => projects.find((item) => item.code === id),
     [id, projects]
@@ -570,6 +578,29 @@ function ProjectDetailInner() {
       window.removeEventListener("keydown", handleKeydown);
     };
   }, [createDialog, draftTitle, handleCreateNode]);
+
+  if (isLoading) {
+    return (
+      <div className="project-detail-only">
+        <div className="panel" style={{ padding: "24px" }}>
+          正在加载项目...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="project-detail-only">
+        <div className="panel" style={{ padding: "24px" }}>
+          {error}
+          <button className="ghost-button" onClick={reloadProjects}>
+            重新加载
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!project) {
     return (

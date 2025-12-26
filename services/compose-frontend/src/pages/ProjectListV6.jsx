@@ -43,8 +43,16 @@ function getProjectRiskLevel(project) {
 }
 
 export default function ProjectListV6({ search = "", onSearchChange = () => {} }) {
-  const { projects, createProject, archiveProject, restoreProject, deleteProject } =
-    useProjects();
+  const {
+    projects,
+    createProject,
+    archiveProject,
+    restoreProject,
+    deleteProject,
+    isLoading,
+    error,
+    reloadProjects,
+  } = useProjects();
   const [statusFilter, setStatusFilter] = useState("全部");
   const [riskFilter, setRiskFilter] = useState("全部");
   const [ownerFilter, setOwnerFilter] = useState("全部");
@@ -247,7 +255,16 @@ export default function ProjectListV6({ search = "", onSearchChange = () => {} }
         </aside>
 
         <div className="v6-list-panel">
-          {filteredProjects.length === 0 ? (
+          {isLoading ? (
+            <div className="v6-empty">正在加载项目...</div>
+          ) : error ? (
+            <div className="v6-empty">
+              {error}
+              <button className="ghost-button" onClick={reloadProjects}>
+                重新加载
+              </button>
+            </div>
+          ) : filteredProjects.length === 0 ? (
             <div className="v6-empty">暂无匹配项目，调整筛选后再试。</div>
           ) : (
             <div className="v6-list">

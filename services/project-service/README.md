@@ -22,5 +22,7 @@ Service runs at `http://127.0.0.1:9400`.
 - `POST /projects`
 - `GET /projects`
 - `GET /projects/{project_id}`
+- `PATCH /projects/{project_id}`
+- `DELETE /projects/{project_id}`
 - `POST /projects/{project_id}/materials`
 - `GET /projects/{project_id}/materials`

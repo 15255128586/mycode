@@ -26,6 +26,25 @@ class ProjectCreate(BaseModel):
     definition_id: Optional[str] = None
     owner: Optional[str] = None
     status: Optional[str] = None
+    due: Optional[str] = None
+    department: Optional[str] = None
+    desc: Optional[str] = None
+    health: Optional[str] = None
+    progress: Optional[float] = None
+    archived: Optional[bool] = None
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    definition_id: Optional[str] = None
+    owner: Optional[str] = None
+    status: Optional[str] = None
+    due: Optional[str] = None
+    department: Optional[str] = None
+    desc: Optional[str] = None
+    health: Optional[str] = None
+    progress: Optional[float] = None
+    archived: Optional[bool] = None
 
 
 class ProjectItem(BaseModel):
@@ -34,6 +53,13 @@ class ProjectItem(BaseModel):
     definition_id: Optional[str] = None
     owner: Optional[str] = None
     status: Optional[str] = None
+    due: Optional[str] = None
+    department: Optional[str] = None
+    desc: Optional[str] = None
+    health: Optional[str] = None
+    progress: Optional[float] = None
+    archived: Optional[bool] = None
+    archived_at: Optional[str] = None
     created_at: str
     updated_at: str
 

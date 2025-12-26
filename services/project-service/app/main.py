@@ -4,19 +4,20 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db import MaterialBinding, Project, ProjectDefinition, get_session, init_db
 from app.models import (
-    MaterialBindingCreate,
-    MaterialBindingItem,
-    MaterialBindingList,
-    ProjectCreate,
-    ProjectDefinitionCreate,
-    ProjectDefinitionItem,
-    ProjectDefinitionList,
-    ProjectItem,
-    ProjectList,
+  MaterialBindingCreate,
+  MaterialBindingItem,
+  MaterialBindingList,
+  ProjectCreate,
+  ProjectUpdate,
+  ProjectDefinitionCreate,
+  ProjectDefinitionItem,
+  ProjectDefinitionList,
+  ProjectItem,
+  ProjectList,
 )
 
 
@@ -61,15 +62,22 @@ def _definition_item(definition: ProjectDefinition) -> ProjectDefinitionItem:
 
 
 def _project_item(project: Project) -> ProjectItem:
-    return ProjectItem(
-        id=project.id,
-        name=project.name,
-        definition_id=project.definition_id,
-        owner=project.owner,
-        status=project.status,
-        created_at=project.created_at,
-        updated_at=project.updated_at,
-    )
+  return ProjectItem(
+    id=project.id,
+    name=project.name,
+    definition_id=project.definition_id,
+    owner=project.owner,
+    status=project.status,
+    due=project.due,
+    department=project.department,
+    desc=project.desc,
+    health=project.health,
+    progress=project.progress,
+    archived=project.archived,
+    archived_at=project.archived_at,
+    created_at=project.created_at,
+    updated_at=project.updated_at,
+  )
 
 
 def _binding_item(binding: MaterialBinding) -> MaterialBindingItem:
@@ -80,7 +88,35 @@ def _binding_item(binding: MaterialBinding) -> MaterialBindingItem:
         file_id=binding.file_id,
         role=binding.role,
         created_at=binding.created_at,
-    )
+  )
+
+
+def _apply_project_updates(project: Project, payload: ProjectCreate | ProjectUpdate, now: str) -> None:
+  if payload.name is not None:
+    project.name = payload.name
+  if payload.definition_id is not None:
+    project.definition_id = payload.definition_id
+  if payload.owner is not None:
+    project.owner = payload.owner
+  if payload.status is not None:
+    project.status = payload.status
+  if payload.due is not None:
+    project.due = payload.due
+  if payload.department is not None:
+    project.department = payload.department
+  if payload.desc is not None:
+    project.desc = payload.desc
+  if payload.health is not None:
+    project.health = payload.health
+  if payload.progress is not None:
+    project.progress = payload.progress
+  if payload.archived is not None:
+    project.archived = payload.archived
+    if payload.archived:
+      project.archived_at = project.archived_at or now
+    else:
+      project.archived_at = None
+  project.updated_at = now
 
 
 @app.post("/project-definitions", response_model=ProjectDefinitionItem)
@@ -109,33 +145,28 @@ def list_project_definitions() -> ProjectDefinitionList:
 
 @app.post("/projects", response_model=ProjectItem)
 def create_project(payload: ProjectCreate) -> ProjectItem:
-    project_id = payload.id or str(uuid.uuid4())
-    now = _now()
-    with get_session() as session:
-        existing = session.get(Project, project_id)
-        if existing:
-            existing.name = payload.name or existing.name
-            existing.definition_id = payload.definition_id or existing.definition_id
-            existing.owner = payload.owner or existing.owner
-            existing.status = payload.status or existing.status
-            existing.updated_at = now
-            session.commit()
-            session.refresh(existing)
-            return _project_item(existing)
+  project_id = payload.id or str(uuid.uuid4())
+  now = _now()
+  with get_session() as session:
+    existing = session.get(Project, project_id)
+    if existing:
+      _apply_project_updates(existing, payload, now)
+      session.commit()
+      session.refresh(existing)
+      return _project_item(existing)
 
-        project = Project(
-            id=project_id,
-            name=payload.name,
-            definition_id=payload.definition_id,
-            owner=payload.owner,
-            status=payload.status,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(project)
-        session.commit()
-        session.refresh(project)
-    return _project_item(project)
+    project = Project(
+      id=project_id,
+      created_at=now,
+      updated_at=now,
+    )
+    _apply_project_updates(project, payload, now)
+    if project.archived is None:
+      project.archived = False
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+  return _project_item(project)
 
 
 @app.get("/projects", response_model=ProjectList)
@@ -147,17 +178,44 @@ def list_projects() -> ProjectList:
 
 @app.get("/projects/{project_id}", response_model=ProjectItem)
 def get_project(project_id: str) -> ProjectItem:
-    with get_session() as session:
-        project = session.get(Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail={"error": "project_not_found"})
-    return _project_item(project)
+  with get_session() as session:
+    project = session.get(Project, project_id)
+    if not project:
+      raise HTTPException(status_code=404, detail={"error": "project_not_found"})
+  return _project_item(project)
+
+
+@app.patch("/projects/{project_id}", response_model=ProjectItem)
+def update_project(project_id: str, payload: ProjectUpdate) -> ProjectItem:
+  now = _now()
+  with get_session() as session:
+    project = session.get(Project, project_id)
+    if not project:
+      raise HTTPException(status_code=404, detail={"error": "project_not_found"})
+    _apply_project_updates(project, payload, now)
+    session.commit()
+    session.refresh(project)
+  return _project_item(project)
+
+
+@app.delete("/projects/{project_id}")
+def delete_project(project_id: str) -> dict:
+  with get_session() as session:
+    project = session.get(Project, project_id)
+    if not project:
+      raise HTTPException(status_code=404, detail={"error": "project_not_found"})
+    session.execute(
+      delete(MaterialBinding).where(MaterialBinding.project_id == project_id)
+    )
+    session.delete(project)
+    session.commit()
+  return {"status": "deleted"}
 
 
 @app.post("/projects/{project_id}/materials", response_model=MaterialBindingItem)
 def create_material_binding(
-    project_id: str,
-    payload: MaterialBindingCreate,
+  project_id: str,
+  payload: MaterialBindingCreate,
 ) -> MaterialBindingItem:
     node_key = payload.node_key or None
     role = payload.role or ("project" if node_key is None else "node")
@@ -165,16 +223,23 @@ def create_material_binding(
 
     with get_session() as session:
         project = session.get(Project, project_id)
-        if not project:
-            project = Project(
-                id=project_id,
-                name=payload.project_name or project_id,
-                definition_id=None,
-                owner=None,
-                status=None,
-                created_at=now,
-                updated_at=now,
-            )
+    if not project:
+      project = Project(
+        id=project_id,
+        name=payload.project_name or project_id,
+        definition_id=None,
+        owner=None,
+        status=None,
+        due=None,
+        department=None,
+        desc=None,
+        health=None,
+        progress=None,
+        archived=False,
+        archived_at=None,
+        created_at=now,
+        updated_at=now,
+      )
             session.add(project)
             session.commit()
 
