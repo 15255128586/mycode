@@ -111,16 +111,7 @@ export default function ProjectListV6({ search = "", onSearchChange = () => {} }
   };
 
   const handleCreateProject = (payload) => {
-    createProject({
-      ...payload,
-      summary: payload.desc,
-      stages: [],
-      deliverables: [],
-      milestones: [],
-      tasks: [],
-      risks: [],
-      team: [],
-    });
+    createProject(payload);
     setCreateModalOpen(false);
   };
 

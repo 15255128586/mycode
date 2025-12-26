@@ -98,7 +98,6 @@ export function ProjectsProvider({ children }) {
 
   const createProject = useCallback(
     async (payload) => {
-      setError("");
       const status = payload.status || "进行中";
       const health = payload.health || "稳定";
       const progress = clampProgress(payload.progress ?? 0);
@@ -118,7 +117,6 @@ export function ProjectsProvider({ children }) {
         }),
       });
       if (!response.ok) {
-        setError("项目创建失败，请稍后重试");
         return;
       }
       const item = await response.json();
@@ -129,7 +127,6 @@ export function ProjectsProvider({ children }) {
 
   const updateProject = useCallback(
     async (code, updates) => {
-      setError("");
       const {
         code: _code,
         archivedAt: _archivedAt,
@@ -144,7 +141,6 @@ export function ProjectsProvider({ children }) {
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        setError("项目更新失败，请稍后重试");
         return;
       }
       const item = await response.json();
@@ -169,12 +165,10 @@ export function ProjectsProvider({ children }) {
 
   const deleteProject = useCallback(
     async (code) => {
-      setError("");
       const response = await fetch(`${baseUrl}/projects/${encodeURIComponent(code)}`, {
         method: "DELETE",
       });
       if (!response.ok) {
-        setError("项目删除失败，请稍后重试");
         return;
       }
       setProjects((prev) => prev.filter((project) => project.code !== code));
